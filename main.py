@@ -7,6 +7,7 @@ from models import ChatLog
 from schemas import ChatRequest
 from ai_service import stream_ai_response
 from database import get_db
+from pydantic import BaseModel
 
 
 app = FastAPI(title="AI Document Assistant", version="1.0.0")
@@ -31,22 +32,23 @@ async def chat_stream_endpoint(request: ChatRequest):
     )
 
 # History save කරන non-streaming endpoint එක
+class SaveChatPayload(BaseModel):
+    request: ChatRequest
+    ai_response: str
+
 @app.post("/api/chat/save")
-async def save_chat_entry(
-    request: ChatRequest, 
-    ai_response: str,
-    db: Session = Depends(get_db)
-):
-    session_id = request.session_id if request.session_id else str(uuid.uuid4())
+async def save_chat_entry(payload: SaveChatPayload, db: Session = Depends(get_db)):
+    session_id = payload.request.session_id if payload.request.session_id else str(uuid.uuid4())
     log_entry = ChatLog(
         session_id=session_id,
-        user_prompt=request.prompt,
-        ai_response=ai_response
+        user_prompt=payload.request.prompt,
+        ai_response=payload.ai_response
     )
     db.add(log_entry)
     db.commit()
     db.refresh(log_entry)
     return {"status": "saved", "id": log_entry.id, "session_id": session_id}
+
 
 # Session එකක history එක retrieve කරන endpoint එක
 @app.get("/api/chat/history/{session_id}")
